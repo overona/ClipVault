@@ -3,7 +3,8 @@
 # The popup hides when it loses focus, so the capture happens inside this same script run.
 param(
     [string]$Exe = (Join-Path $PSScriptRoot '..\bin\Debug\net9.0-windows\win-x64\ClipVault.exe'),
-    [string]$Out = (Join-Path $PSScriptRoot 'popup.png')
+    [string]$Out = (Join-Path $PSScriptRoot 'popup.png'),
+    [string]$Keys = ''   # optional SendKeys sequence sent to the popup before the capture, e.g. "{DOWN}"
 )
 Add-Type -TypeDefinition @"
 using System; using System.Runtime.InteropServices; using System.Text;
@@ -34,6 +35,7 @@ $h = [IntPtr]::Zero
 for ($i = 0; $i -lt 30 -and $h -eq [IntPtr]::Zero; $i++) { Start-Sleep -Milliseconds 100; $h = [Cap]::FindVisible($proc.Id) }
 if ($h -eq [IntPtr]::Zero) { throw "ClipVault popup did not appear" }
 Start-Sleep -Milliseconds 400
+if ($Keys) { Start-Sleep -Milliseconds 900; Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait($Keys); Start-Sleep -Milliseconds 400 }
 $r = New-Object Cap+RECT; [Cap]::GetWindowRect($h, [ref]$r) | Out-Null
 $bmp = New-Object System.Drawing.Bitmap ($r.R - $r.L), ($r.B - $r.T)
 $g = [System.Drawing.Graphics]::FromImage($bmp); $g.CopyFromScreen($r.L, $r.T, 0, 0, $bmp.Size); $g.Dispose()

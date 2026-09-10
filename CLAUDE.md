@@ -96,6 +96,7 @@ Public repo: https://github.com/overona/ClipVault (SSH remote `origin`, branch `
 There is no unit test project. Verification is done by driving the real app:
 
 - `tools\e2e-test.ps1` starts the app, pushes text/image/file content onto the clipboard, opens the popup from a small WinForms form (acting as the "previous app"), types a filter, presses Enter, and asserts the text was pasted into the form's text box. A second round does the same with `Shift+Enter` (plain text) and expects UseCount 2. It also saves a screenshot of the popup to `tools\popup.png`. Run it from a normal PowerShell window (it needs a desktop session). Pass `-Exe` to point at the published exe instead of the Debug build.
+- `tools\promo-shots.ps1` produces the two site screenshots (light + dark) into `..\VSssets\promo\clipvault`: restarts the installed exe, seeds link text / code / image / files, flips `Theme` in settings.json between shots, restores it. `capture-window.ps1 -Keys "{DOWN}"` sends keys before the shot (used to step past a pinned item).
 - `tools\capture-window.ps1` screenshots the running popup (DPI-aware `CopyFromScreen`; `PrintWindow` returns black for this WPF window).
 - Runtime errors are appended to `%LocalAppData%\ClipVault\clipvault.log`.
 
@@ -106,7 +107,7 @@ Gotchas discovered while testing:
 - Claude Code's computer-use bridge cannot be granted access to ClipVault because it is not a Start-Menu app; that is why the PowerShell harness exists.
 - If the workstation is locked (`Get-Process LogonUI` succeeds, `GetForegroundWindow` returns 0), `SendKeys` throws "Access is denied" and every assertion fails. Unlock and rerun; nothing is wrong with the app.
 - Stop the running ClipVault before `dotnet build`; the Debug exe keeps `bin\Debug\...\ClipVault.dll` locked.
-- To screenshot the dark theme, set `"Theme": "Dark"` in `%LocalAppData%\ClipVault\settings.json` and rerun the harness (it restarts the app).
+- `Get-Process LogonUI` is NOT a reliable lock check: LogonUI can keep running after an unlock. If a capture fails with "handle is invalid" from CopyFromScreen, the desktop really is locked; otherwise just try.
 
 ## Continuing on another machine
 
