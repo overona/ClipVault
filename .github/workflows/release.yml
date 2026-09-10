@@ -1,6 +1,12 @@
-# Builds the single-file exe and publishes a GitHub Release whenever a version tag is pushed:
+# Builds the single-file exe, signs it with Azure Artifact Signing (formerly Trusted Signing), and publishes
+# a GitHub Release whenever a version tag is pushed:
 #   git tag v1.2.0 && git push origin v1.2.0
 # The tag must match <Version> in ClipVault.csproj.
+#
+# Signing authenticates with OpenID Connect through the "release" environment: the Entra app below has a
+# federated credential for repo:overona/ClipVault:environment:release, so no secret is stored anywhere.
+# Until the certificate profile exists (identity validation pending) the signing step is skipped with a
+# warning and the exe ships unsigned, exactly as before.
 name: Release
 
 on:
@@ -9,10 +15,20 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+
+env:
+  AZURE_CLIENT_ID: b1023cc3-846e-4497-88bd-f40fd0c2e051        # app registration "github-clipvault-signing"
+  AZURE_TENANT_ID: c44ef68e-7cbf-4716-b8a2-823531bbdb51
+  AZURE_SUBSCRIPTION_ID: 8ba53adc-3831-45ae-bda8-31388570d140
+  SIGNING_ENDPOINT: https://eus.codesigning.azure.net/
+  SIGNING_ACCOUNT: veronasolutions
+  SIGNING_PROFILE: veronasolutions
 
 jobs:
   release:
     runs-on: windows-latest
+    environment: release
     steps:
       - uses: actions/checkout@v4
 
@@ -27,16 +43,53 @@ jobs:
           $ver = (Select-Xml -Path ClipVault.csproj -XPath '//Version').Node.InnerText
           if ($tag -ne $ver) { throw "Tag v$tag does not match <Version>$ver</Version> in ClipVault.csproj" }
 
-      - name: Publish self-contained exe and zip
+      - name: Publish self-contained exe
         shell: pwsh
-        run: ./build.ps1 -Zip
+        run: ./build.ps1
 
-      # Code signing goes here once a certificate is available (SignPath, Azure Trusted Signing, or signtool with a
-      # PFX/token). Sign dist/ClipVault.exe, then rebuild the zip so it contains the signed file.
+      - name: Azure login (OIDC)
+        id: login
+        continue-on-error: true
+        uses: azure/login@v3
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
 
-      - name: Write checksums
+      - name: Sign ClipVault.exe
+        id: sign
+        if: steps.login.outcome == 'success'
+        continue-on-error: true
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ env.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ env.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ env.SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\dist\ClipVault.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          description: ClipVault clipboard history manager
+          description-url: https://veronasolutions.net/clipvault/
+
+      - name: Report signature
+        id: sigcheck
         shell: pwsh
         run: |
+          $s = Get-AuthenticodeSignature dist/ClipVault.exe
+          if ($s.Status -eq 'Valid') {
+            "Signed by: $($s.SignerCertificate.Subject)"
+            "signed=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Warning "ClipVault.exe is NOT signed (status: $($s.Status)). Releasing unsigned."
+            "signed=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Zip and checksums
+        shell: pwsh
+        run: |
+          $ver = '${{ github.ref_name }}'.TrimStart('v')
+          Compress-Archive -Path dist/ClipVault.exe, README.md -DestinationPath "dist/ClipVault-$ver.zip" -Force
           $lines = Get-ChildItem dist -File | Where-Object { $_.Extension -in '.exe', '.zip' } | ForEach-Object {
             '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
           }
@@ -47,16 +100,22 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIGNED: ${{ steps.sigcheck.outputs.signed }}
         run: |
           $tag = '${{ github.ref_name }}'
           $ver = $tag.TrimStart('v')
           $sums = Get-Content dist/SHA256SUMS.txt
+          $signedLine = if ($env:SIGNED -eq 'true') {
+            'The exe is code-signed by Verona Solutions through Azure Artifact Signing; Windows shows the publisher when you run it.'
+          } else {
+            'Windows SmartScreen may warn about an unsigned download the first time: click **More info**, then **Run anyway**.'
+          }
           $notes = @(
             "## ClipVault $ver",
             "",
             '**Download `ClipVault.exe`** and run it. It offers to install itself into your user profile (no admin rights) and to start with Windows, or click *Run from here* to use it as a portable app. Already have ClipVault? Running the new exe offers to update the installed copy.',
             "",
-            "Windows SmartScreen may warn about an unsigned download the first time: click **More info**, then **Run anyway**.",
+            $signedLine,
             "",
             "### SHA-256",
             '```'
