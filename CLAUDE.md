@@ -84,6 +84,10 @@ Key flow for "reuse an item": `MainWindow.UseItem` sets `_expectedHash`, calls `
 
 Second-instance flow: new process finds the mutex taken, calls `AllowSetForegroundWindow(existing pid)`, sets the named event, exits. The first instance's waiter thread calls `ShowPopup()`.
 
+## Releasing
+
+Public repo: https://github.com/overona/ClipVault (SSH remote `origin`, branch `main`). `.github/workflows/build.yml` compiles on every push/PR; `.github/workflows/release.yml` runs on a `v*` tag, checks the tag equals `<Version>` in the csproj, runs `build.ps1 -Zip`, writes `SHA256SUMS.txt`, and creates the GitHub Release with the exe, zip and checksums via `gh` (GITHUB_TOKEN, `contents: write`). To ship: bump `<Version>` in `ClipVault.csproj` and `version=` in `app.manifest`, commit, `git tag vX.Y.Z`, `git push origin main vX.Y.Z`. A code-signing step slot is marked in release.yml.
+
 ## Testing
 
 There is no unit test project. Verification is done by driving the real app:

@@ -1,0 +1,72 @@
+# Builds the single-file exe and publishes a GitHub Release whenever a version tag is pushed:
+#   git tag v1.2.0 && git push origin v1.2.0
+# The tag must match <Version> in ClipVault.csproj.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Check that the tag matches the project version
+        shell: pwsh
+        run: |
+          $tag = '${{ github.ref_name }}'.TrimStart('v')
+          $ver = (Select-Xml -Path ClipVault.csproj -XPath '//Version').Node.InnerText
+          if ($tag -ne $ver) { throw "Tag v$tag does not match <Version>$ver</Version> in ClipVault.csproj" }
+
+      - name: Publish self-contained exe and zip
+        shell: pwsh
+        run: ./build.ps1 -Zip
+
+      # Code signing goes here once a certificate is available (SignPath, Azure Trusted Signing, or signtool with a
+      # PFX/token). Sign dist/ClipVault.exe, then rebuild the zip so it contains the signed file.
+
+      - name: Write checksums
+        shell: pwsh
+        run: |
+          $lines = Get-ChildItem dist -File | Where-Object { $_.Extension -in '.exe', '.zip' } | ForEach-Object {
+            '{0}  {1}' -f (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower(), $_.Name
+          }
+          Set-Content -Path dist/SHA256SUMS.txt -Value $lines -Encoding ascii
+          Get-Content dist/SHA256SUMS.txt
+
+      - name: Create the GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = '${{ github.ref_name }}'
+          $ver = $tag.TrimStart('v')
+          $sums = Get-Content dist/SHA256SUMS.txt
+          $notes = @(
+            "## ClipVault $ver",
+            "",
+            '**Download `ClipVault.exe`** and run it. It offers to install itself into your user profile (no admin rights) and to start with Windows, or click *Run from here* to use it as a portable app. Already have ClipVault? Running the new exe offers to update the installed copy.',
+            "",
+            "Windows SmartScreen may warn about an unsigned download the first time: click **More info**, then **Run anyway**.",
+            "",
+            "### SHA-256",
+            '```'
+          ) + $sums + @('```')
+          Set-Content -Path dist/notes.md -Value $notes -Encoding utf8
+
+          $assets = @('dist/ClipVault.exe', "dist/ClipVault-$ver.zip", 'dist/SHA256SUMS.txt')
+          if (gh release view $tag 2>$null) {
+            gh release upload $tag @assets --clobber
+            gh release edit $tag --title "ClipVault $ver" --notes-file dist/notes.md
+          } else {
+            gh release create $tag @assets --title "ClipVault $ver" --notes-file dist/notes.md --latest
+          }

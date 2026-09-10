@@ -2,6 +2,10 @@
 
 A native Windows clipboard history manager. It runs quietly in the system tray, remembers everything you copy (text, images, files), and lets you bring any of it back with a keystroke.
 
+## Download
+
+**[Latest release](https://github.com/overona/ClipVault/releases/latest)**: grab `ClipVault.exe`, run it, and let it install itself (no admin rights). Each release lists SHA-256 checksums in `SHA256SUMS.txt`. Full details under [Installing / sharing](#installing--sharing).
+
 ## Features
 
 - **Global hotkey**: `Ctrl+Shift+V` opens the history from any app (changeable in Settings).
