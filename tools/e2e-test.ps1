@@ -7,6 +7,8 @@
 #   3. Launches ClipVault a second time (single-instance signal) so the popup opens,
 #      types a search term, presses Enter.
 #   4. Asserts the matching item was pasted into the text box, saves tools\popup.png.
+#   5. Repeats the popup with Shift+Enter (paste as plain text) and checks the same text arrives
+#      and the item's UseCount reached 2.
 param(
     [string]$Exe = (Join-Path $PSScriptRoot '..\bin\Debug\net9.0-windows\win-x64\ClipVault.exe'),
     [string]$Screenshot = (Join-Path $PSScriptRoot 'popup.png')
@@ -42,7 +44,7 @@ function Snap($h, $path) {
 
 # 1. Fresh instance + seed the clipboard
 Stop-Process -Name ClipVault -Force -ErrorAction SilentlyContinue; Start-Sleep 1
-Start-Process $Exe; Start-Sleep 3
+Start-Process $Exe -ArgumentList "--portable"; Start-Sleep 3
 Set-Clipboard -Value "first seed item"; Start-Sleep 0.8
 Set-Clipboard -Value $expected; Start-Sleep 0.8
 $bmp = New-Object System.Drawing.Bitmap 320, 200
@@ -62,11 +64,15 @@ $timer = New-Object System.Windows.Forms.Timer; $timer.Interval = 900
 $timer.Add_Tick({
     $script:step++
     switch ($script:step) {
-        1 { $box.Focus(); Start-Process $Exe }                                   # 3. open popup
+        1 { $box.Focus(); Start-Process $Exe -ArgumentList "--portable" }                                   # 3. open popup
         3 { $log.Add("popup foreground: '" + [E2E]::FgTitle() + "'"); $log.Add((Snap ([E2E]::GetForegroundWindow()) $Screenshot)) }
         4 { [System.Windows.Forms.SendKeys]::SendWait("e2e text") }
         5 { [System.Windows.Forms.SendKeys]::SendWait("{ENTER}") }
-        7 { $log.Add("after paste foreground: '" + [E2E]::FgTitle() + "'"); $script:pasted = $box.Text; $timer.Stop(); $form.Close() }
+        7 { $log.Add("after paste foreground: '" + [E2E]::FgTitle() + "'"); $script:pasted = $box.Text }
+        8 { $box.Clear(); $box.Focus(); Start-Process $Exe -ArgumentList "--portable" }                    # 5. plain-text round
+        10 { [System.Windows.Forms.SendKeys]::SendWait("e2e text") }
+        11 { [System.Windows.Forms.SendKeys]::SendWait("+{ENTER}") }
+        13 { $log.Add("after plain paste foreground: '" + [E2E]::FgTitle() + "'"); $script:pastedPlain = $box.Text; $timer.Stop(); $form.Close() }
     }
 })
 $form.Add_Shown({ $timer.Start() })
@@ -80,9 +86,10 @@ foreach ($i in $history) { Write-Host ("  {0,-6} use={1} {2}" -f $i.Kind, $i.Use
 
 $ok = $true
 if (($pasted -replace "`r`n", "`n") -ne $expected) { Write-Host "FAIL: pasted text was [$pasted]" -ForegroundColor Red; $ok = $false }
+if (($pastedPlain -replace "`r`n", "`n") -ne $expected) { Write-Host "FAIL: plain-text paste (Shift+Enter) was [$pastedPlain]" -ForegroundColor Red; $ok = $false }
 $dups = @($history | Where-Object { $_.Text -eq "first seed item" }).Count
 if ($dups -ne 1) { Write-Host "FAIL: expected 1 'first seed item', found $dups" -ForegroundColor Red; $ok = $false }
-if ($history[0].Text -ne $expected -or $history[0].UseCount -lt 1) { Write-Host "FAIL: reused item is not at the top with UseCount>=1" -ForegroundColor Red; $ok = $false }
+if ($history[0].Text -ne $expected -or $history[0].UseCount -lt 2) { Write-Host "FAIL: reused item is not at the top with UseCount>=2" -ForegroundColor Red; $ok = $false }
 $logFile = "$env:LOCALAPPDATA\ClipVault\clipvault.log"
 if (Test-Path $logFile) { Write-Host "clipvault.log:"; Get-Content $logFile | ForEach-Object { Write-Host "  $_" } }
 if ($ok) { Write-Host "PASS" -ForegroundColor Green } else { exit 1 }

@@ -29,6 +29,17 @@ internal static class NativeMethods
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
     [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vKey);
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+    [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
+
+    private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+
+    /// <summary>Asks DWM to draw a dark (or light) title bar for a window that still has the standard chrome.</summary>
+    public static void SetDarkTitleBar(IntPtr hwnd, bool dark)
+    {
+        if (hwnd == IntPtr.Zero) return;
+        int value = dark ? 1 : 0;
+        try { DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref value, sizeof(int)); } catch { }
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct INPUT { public uint type; public InputUnion U; }

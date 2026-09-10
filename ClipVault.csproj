@@ -12,9 +12,12 @@
     <ApplicationIcon>Assets\ClipVault.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-    <Version>1.0.0</Version>
+    <Version>1.1.2</Version>
     <Product>ClipVault</Product>
     <Description>Clipboard history manager for Windows</Description>
+    <Authors>Ovidio Verona</Authors>
+    <Company>Ovidio Verona</Company>
+    <Copyright>Copyright © 2026 Ovidio Verona</Copyright>
 
     <!-- Publish as one self-contained exe: dotnet publish -c Release -->
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>

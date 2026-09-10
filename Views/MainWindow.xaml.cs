@@ -8,6 +8,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using ClipVault.Models;
 using ClipVault.Native;
@@ -31,6 +32,7 @@ public partial class MainWindow : Window
     private string? _expectedHash;
     private bool _hotkeyRegistered;
     private bool _suppressDeactivateHide;
+    private Vector _slideFrom;   // offset (DIPs) toward the taskbar edge the popup slides in from
 
     public MainWindow(HistoryStore store, Settings settings)
     {
@@ -51,7 +53,7 @@ public partial class MainWindow : Window
         _clockTimer.Start();
 
         UpdateCount();
-        UpdatePreview(null);
+        UpdatePreview(Selected);
     }
 
     /// <summary>Creates the native window (without showing it) so we can listen for clipboard changes and the hotkey.</summary>
@@ -120,6 +122,7 @@ public partial class MainWindow : Window
             }
 
             var sourceApp = NativeMethods.GetForegroundProcessName();
+            if (_settings.IsExcludedApp(sourceApp)) return;
             var item = ClipboardService.Capture(_settings, _store.ImagesDir);
             if (item is null) return;
             item.SourceApp = sourceApp;
@@ -153,29 +156,83 @@ public partial class MainWindow : Window
 
         SearchBox.Text = "";
         _view.Refresh();
+        bool animate = !IsVisible;
+        if (animate) Opacity = 0;
         Show();
         Activate();
         NativeMethods.SetForegroundWindow(_hwnd);
         SearchBox.Focus();
         SelectIndex(0);
+        if (animate) SlideIn();
     }
 
+    /// <summary>Short slide + fade from the taskbar edge, the way Windows flyouts appear.</summary>
+    private void SlideIn()
+    {
+        BeginAnimation(LeftProperty, null);
+        BeginAnimation(TopProperty, null);
+        BeginAnimation(OpacityProperty, null);
+
+        double left = Left, top = Top;
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var slide = TimeSpan.FromMilliseconds(220);
+
+        if (_slideFrom.X != 0)
+            BeginAnimation(LeftProperty, new DoubleAnimation(left + _slideFrom.X, left, slide) { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
+        if (_slideFrom.Y != 0)
+            BeginAnimation(TopProperty, new DoubleAnimation(top + _slideFrom.Y, top, slide) { EasingFunction = ease, FillBehavior = FillBehavior.Stop });
+
+        var fade = new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(160)) { FillBehavior = FillBehavior.Stop };
+        fade.Completed += (_, _) => Opacity = 1;
+        Opacity = 1; // base value the Stop fill returns to
+        BeginAnimation(OpacityProperty, fade);
+    }
+
+    /// <summary>
+    /// Docks the popup against the taskbar of the screen the cursor is on (centered along it, like the
+    /// Windows 11 clipboard flyout) and records which direction to slide in from.
+    /// </summary>
     private void PositionOnCursorScreen()
     {
         try
         {
+            const double margin = 12, slideDistance = 56;
             var cursor = System.Windows.Forms.Cursor.Position;
-            var area = System.Windows.Forms.Screen.FromPoint(cursor).WorkingArea;
+            var screen = System.Windows.Forms.Screen.FromPoint(cursor);
             var m = _source?.CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
-            var tl = m.Transform(new Point(area.Left, area.Top));
-            var br = m.Transform(new Point(area.Right, area.Bottom));
-            double w = Math.Min(Width, br.X - tl.X - 40);
-            double h = Math.Min(Height, br.Y - tl.Y - 40);
+            var wa = ToDips(screen.WorkingArea, m);
+            var bounds = ToDips(screen.Bounds, m);
+
+            double w = Math.Min(Width, wa.Width - 2 * margin);
+            double h = Math.Min(Height, wa.Height - 2 * margin);
             Width = w; Height = h;
-            Left = tl.X + (br.X - tl.X - w) / 2;
-            Top = tl.Y + (br.Y - tl.Y - h) / 2;
+
+            // The taskbar lives on whichever side the working area is inset from the screen bounds.
+            if (wa.Bottom < bounds.Bottom - 0.5 || (wa == bounds)) // bottom, or auto-hidden/unknown: assume bottom
+            {
+                Left = wa.Left + (wa.Width - w) / 2; Top = wa.Bottom - h - margin; _slideFrom = new Vector(0, slideDistance);
+            }
+            else if (wa.Top > bounds.Top + 0.5)
+            {
+                Left = wa.Left + (wa.Width - w) / 2; Top = wa.Top + margin; _slideFrom = new Vector(0, -slideDistance);
+            }
+            else if (wa.Left > bounds.Left + 0.5)
+            {
+                Left = wa.Left + margin; Top = wa.Top + (wa.Height - h) / 2; _slideFrom = new Vector(-slideDistance, 0);
+            }
+            else
+            {
+                Left = wa.Right - w - margin; Top = wa.Top + (wa.Height - h) / 2; _slideFrom = new Vector(slideDistance, 0);
+            }
         }
         catch (Exception ex) { App.Log("Positioning failed: " + ex.Message); }
+    }
+
+    private static Rect ToDips(System.Drawing.Rectangle r, Matrix fromDevice)
+    {
+        var tl = fromDevice.Transform(new Point(r.Left, r.Top));
+        var br = fromDevice.Transform(new Point(r.Right, r.Bottom));
+        return new Rect(tl, br);
     }
 
     private void Window_Deactivated(object sender, EventArgs e)
@@ -197,12 +254,12 @@ public partial class MainWindow : Window
 
     private ClipItem? Selected => ItemList.SelectedItem as ClipItem;
 
-    private void UseItem(ClipItem? item, bool paste)
+    private void UseItem(ClipItem? item, bool paste, bool plainText = false)
     {
         if (item is null) return;
 
         _expectedHash = item.Hash;
-        if (!ClipboardService.Apply(item))
+        if (!ClipboardService.Apply(item, plainText))
         {
             _expectedHash = null;
             System.Windows.MessageBox.Show(this, "That item could not be put on the clipboard. The original files may have been moved or deleted.",
@@ -226,6 +283,7 @@ public partial class MainWindow : Window
     }
 
     private void Paste_Click(object sender, RoutedEventArgs e) => UseItem(Selected, paste: true);
+    private void PastePlain_Click(object sender, RoutedEventArgs e) => UseItem(Selected, paste: true, plainText: true);
     private void Copy_Click(object sender, RoutedEventArgs e) => UseItem(Selected, paste: false);
 
     private void Pin_Click(object sender, RoutedEventArgs e) => TogglePin();
@@ -284,6 +342,7 @@ public partial class MainWindow : Window
                 _store.MaxItems = _settings.MaxItems;
                 _store.Trim();
                 App.Current.UpdateTrayText();
+                ThemeManager.Apply(_settings.Theme);
                 if (!RegisterHotkey())
                     System.Windows.MessageBox.Show($"Could not register {_settings.HotkeyText}. Another program is probably using it. Pick a different combination in Settings.",
                         "ClipVault", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -314,16 +373,38 @@ public partial class MainWindow : Window
         index = Math.Clamp(index, 0, _view.Count - 1);
         ItemList.SelectedIndex = index;
         if (ItemList.SelectedItem is not null) ItemList.ScrollIntoView(ItemList.SelectedItem);
+        // SelectionChanged does not fire when the index was already selected, so sync the preview here too.
+        UpdatePreview(Selected);
     }
 
     private void MoveSelection(int delta) => SelectIndex(ItemList.SelectedIndex < 0 ? 0 : ItemList.SelectedIndex + delta);
 
     private void ItemList_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdatePreview(Selected);
 
+    private void ItemList_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+    {
+        // Rows are Focusable=False so typing always lands in the search box, but WPF only selects a
+        // ListBoxItem on click when it can take focus. Select the clicked row here instead.
+        if (e.ChangedButton is not (MouseButton.Left or MouseButton.Right)) return;
+        if (e.OriginalSource is DependencyObject d && FindAncestor<ListBoxItem>(d) is { DataContext: ClipItem item })
+        {
+            ItemList.SelectedItem = item;
+            UpdatePreview(item); // no SelectionChanged when the row was already selected
+        }
+    }
+
     private void ItemList_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
-        if (e.OriginalSource is DependencyObject d && FindAncestor<ListBoxItem>(d) is not null)
+        if (e.OriginalSource is not DependencyObject d || FindAncestor<System.Windows.Controls.Primitives.ButtonBase>(d) is not null) return;
+        if (FindAncestor<ListBoxItem>(d) is not null)
             UseItem(Selected, paste: true);
+    }
+
+    /// <summary>The small copy icon on each row: copy that row without pasting.</summary>
+    private void RowCopy_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.DataContext is ClipItem item) UseItem(item, paste: false);
+        e.Handled = true;
     }
 
     private static T? FindAncestor<T>(DependencyObject d) where T : DependencyObject
@@ -339,13 +420,15 @@ public partial class MainWindow : Window
         {
             PreviewTitle.Text = "Nothing selected";
             PreviewMeta.Text = "";
-            PinButton.Foreground = (Brush)FindResource("Muted");
+            PinButton.SetResourceReference(ForegroundProperty, "Muted");
+            PastePlainMenu.IsEnabled = false;
             return;
         }
         PreviewTitle.Text = item.KindLabel + (item.SourceApp is null ? "" : "  from " + item.SourceApp);
         PreviewMeta.Text = $"{item.Details}   ·   copied {item.CopiedAtLocal}   ·   {item.UsageText}";
-        PinButton.Foreground = item.Pinned ? (Brush)FindResource("Accent") : (Brush)FindResource("Muted");
+        PinButton.SetResourceReference(ForegroundProperty, item.Pinned ? "Accent" : "Muted");
         PinMenu.Header = item.Pinned ? "Unpin" : "Pin";
+        PastePlainMenu.IsEnabled = item.Kind == ClipKind.Text;
     }
 
     private void UpdateCount()
@@ -363,6 +446,7 @@ public partial class MainWindow : Window
     private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
         bool ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+        bool shift = Keyboard.Modifiers.HasFlag(ModifierKeys.Shift);
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
 
         if (ctrl && key >= Key.D1 && key <= Key.D9)
@@ -387,7 +471,8 @@ public partial class MainWindow : Window
             case Key.Home when ctrl || !SearchBox.IsKeyboardFocused: SelectIndex(0); e.Handled = true; break;
             case Key.End when ctrl || !SearchBox.IsKeyboardFocused: SelectIndex(_view.Count - 1); e.Handled = true; break;
             case Key.Enter:
-                UseItem(Selected, paste: !ctrl);
+                // Enter pastes, Ctrl+Enter only copies; Shift on either strips RTF/HTML so only plain text is pasted.
+                UseItem(Selected, paste: !ctrl, plainText: shift);
                 e.Handled = true;
                 break;
             case Key.Delete when !SearchBox.IsKeyboardFocused || string.IsNullOrEmpty(SearchBox.Text) || ctrl:

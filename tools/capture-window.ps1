@@ -28,8 +28,8 @@ public static class Cap {
 Add-Type -AssemblyName System.Drawing
 
 $proc = Get-Process ClipVault -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $proc) { Start-Process (Resolve-Path $Exe).Path; Start-Sleep 3; $proc = Get-Process ClipVault | Select-Object -First 1 }
-Start-Process (Resolve-Path $Exe).Path   # second instance = "show popup" signal
+if (-not $proc) { Start-Process (Resolve-Path $Exe).Path -ArgumentList "--portable"; Start-Sleep 3; $proc = Get-Process ClipVault | Select-Object -First 1 }
+Start-Process (Resolve-Path $Exe).Path -ArgumentList "--portable"   # second instance = "show popup" signal
 $h = [IntPtr]::Zero
 for ($i = 0; $i -lt 30 -and $h -eq [IntPtr]::Zero; $i++) { Start-Sleep -Milliseconds 100; $h = [Cap]::FindVisible($proc.Id) }
 if ($h -eq [IntPtr]::Zero) { throw "ClipVault popup did not appear" }

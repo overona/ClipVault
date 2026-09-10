@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows.Input;
 using ClipVault.Native;
 
 namespace ClipVault.Services;
+
+public enum AppTheme { System, Light, Dark }
 
 public sealed class Settings
 {
@@ -24,8 +27,32 @@ public sealed class Settings
     public int MaxTextChars { get; set; } = 500_000;
     public bool FirstRunShown { get; set; }
 
+    /// <summary>Full path of an exe for which the user chose "Run from here" / "Not now" in the install prompt.</summary>
+    public string? InstallPromptDismissedFor { get; set; }
+
+    /// <summary>Light / dark palette, or follow the Windows "app mode" setting.</summary>
+    public AppTheme Theme { get; set; } = AppTheme.System;
+
+    /// <summary>Images whose longer edge exceeds this many pixels are shrunk on capture. 0 keeps the original size.</summary>
+    public int MaxImageEdge { get; set; } = 4096;
+
+    /// <summary>Process names (with or without ".exe") whose copies are never recorded, e.g. a password manager.</summary>
+    public List<string> ExcludedApps { get; set; } = new();
+
     [JsonIgnore]
     public string HotkeyText => FormatHotkey(HotkeyModifiers, HotkeyKey);
+
+    public bool IsExcludedApp(string? processName)
+    {
+        if (string.IsNullOrEmpty(processName)) return false;
+        foreach (var raw in ExcludedApps)
+        {
+            var name = raw.Trim();
+            if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) name = name[..^4];
+            if (name.Length > 0 && string.Equals(name, processName, StringComparison.OrdinalIgnoreCase)) return true;
+        }
+        return false;
+    }
 
     public static string FormatHotkey(ModifierKeys mods, Key key)
     {
@@ -66,7 +93,12 @@ public sealed class Settings
         try
         {
             if (File.Exists(FilePath))
-                return JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath), JsonOptions) ?? new Settings();
+            {
+                var s = JsonSerializer.Deserialize<Settings>(File.ReadAllText(FilePath), JsonOptions) ?? new Settings();
+                s.ExcludedApps ??= new();
+                s.ExcludedApps = s.ExcludedApps.Where(a => !string.IsNullOrWhiteSpace(a)).Select(a => a.Trim()).ToList();
+                return s;
+            }
         }
         catch { /* fall through to defaults */ }
         return new Settings();
@@ -77,8 +109,6 @@ public sealed class Settings
         Directory.CreateDirectory(DataDir);
         File.WriteAllText(FilePath, JsonSerializer.Serialize(this, JsonOptions));
     }
-
-    public Settings Clone() => (Settings)MemberwiseClone();
 }
 
 /// <summary>Toggles the HKCU Run entry so the app starts at login.</summary>
@@ -97,15 +127,43 @@ public static class StartupRegistration
         catch { return false; }
     }
 
-    public static void SetEnabled(bool enabled)
+    /// <param name="exe">Exe to register; defaults to the running one.</param>
+    public static void SetEnabled(bool enabled, string? exe = null)
     {
         using var key = Microsoft.Win32.Registry.CurrentUser.CreateSubKey(RunKey, writable: true);
         if (key is null) return;
         if (enabled)
         {
-            var exe = Environment.ProcessPath ?? System.IO.Path.Combine(AppContext.BaseDirectory, "ClipVault.exe");
+            exe ??= Environment.ProcessPath ?? System.IO.Path.Combine(AppContext.BaseDirectory, "ClipVault.exe");
             key.SetValue(ValueName, $"\"{exe}\"");
         }
         else key.DeleteValue(ValueName, throwOnMissingValue: false);
+    }
+
+    /// <summary>Path currently registered, or null.</summary>
+    public static string? RegisteredExe()
+    {
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKey, writable: false);
+            return key?.GetValue(ValueName) is string s ? s.Trim().Trim('"') : null;
+        }
+        catch { return null; }
+    }
+
+    /// <summary>
+    /// If start-with-Windows points at an exe that no longer exists (the file was moved), re-point it at the
+    /// running exe so the setting keeps working without the user noticing.
+    /// </summary>
+    public static void RepairIfStale()
+    {
+        try
+        {
+            var registered = RegisteredExe();
+            if (registered is null || System.IO.File.Exists(registered)) return;
+            SetEnabled(true);
+            App.Log($"Start-with-Windows entry pointed at missing '{registered}'; re-pointed at '{Environment.ProcessPath}'.");
+        }
+        catch (Exception ex) { App.Log("Startup repair failed: " + ex.Message); }
     }
 }

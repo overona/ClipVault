@@ -53,14 +53,17 @@ public static class ClipboardService
         if (settings.CaptureImages && (data.GetDataPresent(DataFormats.Bitmap) || data.GetDataPresent(DataFormats.Dib) || data.GetDataPresent("PNG")))
         {
             var bmp = Retry(() => System.Windows.Clipboard.ContainsImage() ? System.Windows.Clipboard.GetImage() : null);
-            if (bmp is not null) return FromImage(bmp, imagesDir);
+            if (bmp is not null) return FromImage(bmp, imagesDir, settings.MaxImageEdge);
         }
 
         return null;
     }
 
-    /// <summary>Puts an item back on the clipboard (with all the formats we kept).</summary>
-    public static bool Apply(ClipItem item)
+    /// <summary>
+    /// Puts an item back on the clipboard with all the formats we kept, or, when <paramref name="plainText"/>
+    /// is set, with only the plain text so the target app cannot pick up RTF/HTML formatting.
+    /// </summary>
+    public static bool Apply(ClipItem item, bool plainText = false)
     {
         var d = new DataObject();
         switch (item.Kind)
@@ -68,8 +71,11 @@ public static class ClipboardService
             case ClipKind.Text:
                 d.SetData(DataFormats.UnicodeText, item.Text ?? "");
                 d.SetData(DataFormats.Text, item.Text ?? "");
-                if (!string.IsNullOrEmpty(item.Rtf)) d.SetData(DataFormats.Rtf, item.Rtf);
-                if (!string.IsNullOrEmpty(item.Html)) d.SetData(DataFormats.Html, item.Html);
+                if (!plainText)
+                {
+                    if (!string.IsNullOrEmpty(item.Rtf)) d.SetData(DataFormats.Rtf, item.Rtf);
+                    if (!string.IsNullOrEmpty(item.Html)) d.SetData(DataFormats.Html, item.Html);
+                }
                 break;
 
             case ClipKind.Image:
@@ -112,8 +118,9 @@ public static class ClipboardService
         Hash = Sha256("F\0" + string.Join("\0", files)),
     };
 
-    private static ClipItem FromImage(BitmapSource bmp, string imagesDir)
+    private static ClipItem FromImage(BitmapSource bmp, string imagesDir, int maxEdge)
     {
+        bmp = ShrinkToFit(bmp, maxEdge);
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bmp));
         using var ms = new MemoryStream();
@@ -134,6 +141,17 @@ public static class ClipboardService
     }
 
     // ---- helpers ----
+
+    /// <summary>Scales the bitmap down so its longer edge is at most <paramref name="maxEdge"/> pixels (0 = no limit).</summary>
+    private static BitmapSource ShrinkToFit(BitmapSource bmp, int maxEdge)
+    {
+        int longest = Math.Max(bmp.PixelWidth, bmp.PixelHeight);
+        if (maxEdge <= 0 || longest <= maxEdge) return bmp;
+        double scale = (double)maxEdge / longest;
+        var scaled = new TransformedBitmap(bmp, new System.Windows.Media.ScaleTransform(scale, scale));
+        scaled.Freeze();
+        return scaled;
+    }
 
     private static bool IsExcluded(IDataObject data)
     {

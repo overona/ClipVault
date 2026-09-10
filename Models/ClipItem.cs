@@ -6,6 +6,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 using System.Windows.Media.Imaging;
+using ClipVault.Services;
 
 namespace ClipVault.Models;
 
@@ -90,12 +91,17 @@ public sealed class ClipItem : INotifyPropertyChanged
     [JsonIgnore]
     public string UsageText => UseCount == 0 ? "never reused" : $"reused {UseCount}x";
 
+    private bool? _isCode;
+    /// <summary>True when a text clip looks like source code, JSON, markup, SQL or a shell command (see <see cref="CodeDetector"/>).</summary>
     [JsonIgnore]
-    public string KindLabel => Kind switch { ClipKind.Text => "Text", ClipKind.Image => "Image", _ => "Files" };
+    public bool IsCode => _isCode ??= Kind == ClipKind.Text && CodeDetector.LooksLikeCode(Text);
+
+    [JsonIgnore]
+    public string KindLabel => Kind switch { ClipKind.Text => IsCode ? "Code" : "Text", ClipKind.Image => "Image", _ => "Files" };
 
     /// <summary>Segoe MDL2 Assets glyph for the kind.</summary>
     [JsonIgnore]
-    public string Glyph => Kind switch { ClipKind.Text => "", ClipKind.Image => "", _ => "" };
+    public string Glyph => Kind switch { ClipKind.Text => IsCode ? "" : "", ClipKind.Image => "", _ => "" };
 
     [JsonIgnore]
     public string TimeAgo

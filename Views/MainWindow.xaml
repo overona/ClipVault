@@ -4,7 +4,7 @@
         xmlns:local="clr-namespace:ClipVault.Views"
         Title="ClipVault" Width="960" Height="600" MinWidth="700" MinHeight="400"
         WindowStyle="None" ResizeMode="CanResize" ShowInTaskbar="False" Topmost="True"
-        Background="{StaticResource WindowBg}" Foreground="{StaticResource Text}"
+        AllowsTransparency="True" Background="Transparent" Foreground="{DynamicResource Text}"
         FontFamily="Segoe UI" FontSize="13" TextOptions.TextFormattingMode="Display" UseLayoutRounding="True"
         Deactivated="Window_Deactivated" PreviewKeyDown="Window_PreviewKeyDown" PreviewTextInput="Window_PreviewTextInput">
 
@@ -18,7 +18,7 @@
         <!-- ============ List row templates ============ -->
         <Style x:Key="RowHeader" TargetType="TextBlock">
             <Setter Property="FontSize" Value="11"/>
-            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
 
@@ -27,7 +27,23 @@
                 <TextBlock Style="{StaticResource Icon}" Text="{Binding Glyph}" FontSize="12" Margin="0,0,6,0"/>
                 <TextBlock Style="{StaticResource RowHeader}" Text="{Binding KindLabel}"/>
                 <TextBlock Style="{StaticResource RowHeader}" Text="{Binding SourceApp, StringFormat=' from {0}'}" />
-                <TextBlock Style="{StaticResource Icon}" Text="&#xE840;" FontSize="11" DockPanel.Dock="Right" Foreground="{StaticResource Accent}"
+                <Button DockPanel.Dock="Right" Content="&#xE8C8;" Width="24" Height="20" FontSize="11" Margin="6,0,0,0"
+                        ToolTip="Copy to clipboard (Ctrl+Enter)" Click="RowCopy_Click">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource IconButton}">
+                            <Setter Property="Opacity" Value="0"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                    <Setter Property="Opacity" Value="1"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                    <Setter Property="Opacity" Value="1"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <TextBlock Style="{StaticResource Icon}" Text="&#xE840;" FontSize="11" DockPanel.Dock="Right" Foreground="{DynamicResource Accent}"
                            ToolTip="Pinned" Visibility="{Binding Pinned, Converter={StaticResource BoolToVis}}" Margin="6,0,0,0"/>
                 <TextBlock Style="{StaticResource RowHeader}" Text="{Binding TimeAgo}" DockPanel.Dock="Right"/>
             </DockPanel>
@@ -41,10 +57,21 @@
             </StackPanel>
         </DataTemplate>
 
+        <DataTemplate x:Key="CodeRow">
+            <StackPanel Margin="12,8">
+                <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource RowHeaderTemplate}"/>
+                <Border Background="{DynamicResource CodeBg}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="4" Padding="8,5">
+                    <TextBlock Text="{Binding Preview}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                               MaxHeight="54" LineHeight="18" LineStackingStrategy="BlockLineHeight"
+                               FontFamily="Cascadia Mono, Consolas, Courier New" FontSize="12"/>
+                </Border>
+            </StackPanel>
+        </DataTemplate>
+
         <DataTemplate x:Key="ImageRow">
             <StackPanel Margin="12,8">
                 <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource RowHeaderTemplate}"/>
-                <Border BorderBrush="{StaticResource Border}" BorderThickness="1" HorizontalAlignment="Left" Background="White" Padding="2">
+                <Border BorderBrush="{DynamicResource Border}" BorderThickness="1" HorizontalAlignment="Left" Background="White" Padding="2">
                     <Image Source="{Binding Thumbnail}" MaxHeight="96" MaxWidth="240" Stretch="Uniform" StretchDirection="DownOnly"
                            RenderOptions.BitmapScalingMode="HighQuality"/>
                 </Border>
@@ -62,7 +89,8 @@
         </DataTemplate>
 
         <local:ClipTemplateSelector x:Key="RowSelector"
-                                    Text="{StaticResource TextRow}" Image="{StaticResource ImageRow}" Files="{StaticResource FilesRow}"/>
+                                    Text="{StaticResource TextRow}" Code="{StaticResource CodeRow}"
+                                    Image="{StaticResource ImageRow}" Files="{StaticResource FilesRow}"/>
 
         <!-- ============ Preview templates ============ -->
         <DataTemplate x:Key="TextPreview">
@@ -70,6 +98,15 @@
                      VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                      BorderThickness="0" Background="Transparent" Padding="12" FontSize="13"
                      FontFamily="Segoe UI, Consolas" IsReadOnlyCaretVisible="True"/>
+        </DataTemplate>
+
+        <DataTemplate x:Key="CodePreview">
+            <Border Background="{DynamicResource CodeBg}">
+                <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" TextWrapping="NoWrap" AcceptsReturn="True" AcceptsTab="True"
+                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                         BorderThickness="0" Background="Transparent" Padding="12" FontSize="12.5"
+                         FontFamily="Cascadia Mono, Consolas, Courier New" IsReadOnlyCaretVisible="True"/>
+            </Border>
         </DataTemplate>
 
         <DataTemplate x:Key="ImagePreview">
@@ -93,7 +130,8 @@
         </DataTemplate>
 
         <local:ClipTemplateSelector x:Key="PreviewSelector"
-                                    Text="{StaticResource TextPreview}" Image="{StaticResource ImagePreview}" Files="{StaticResource FilesPreview}"/>
+                                    Text="{StaticResource TextPreview}" Code="{StaticResource CodePreview}"
+                                    Image="{StaticResource ImagePreview}" Files="{StaticResource FilesPreview}"/>
 
         <!-- ============ List item container ============ -->
         <Style x:Key="RowStyle" TargetType="ListBoxItem">
@@ -109,11 +147,11 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{StaticResource Hover}"/>
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource Hover}"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="{StaticResource AccentSoft}"/>
-                                <Setter TargetName="bd" Property="BorderBrush" Value="#BFDBFE"/>
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource AccentSoft}"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource AccentBorder}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -122,7 +160,7 @@
         </Style>
     </Window.Resources>
 
-    <Border BorderBrush="{StaticResource Border}" BorderThickness="1">
+    <Border Background="{DynamicResource WindowBg}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="8">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="40"/>
@@ -134,7 +172,7 @@
             <DockPanel Grid.Row="0" LastChildFill="True">
                 <Image Source="pack://application:,,,/Assets/ClipVault.ico" Width="18" Height="18" Margin="12,0,8,0"/>
                 <TextBlock Text="ClipVault" FontWeight="SemiBold" VerticalAlignment="Center" FontSize="13"/>
-                <TextBlock x:Name="CountText" Foreground="{StaticResource Muted}" VerticalAlignment="Center" Margin="10,0,0,0" FontSize="12"/>
+                <TextBlock x:Name="CountText" Foreground="{DynamicResource Muted}" VerticalAlignment="Center" Margin="10,0,0,0" FontSize="12"/>
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" Margin="0,4,6,0" WindowChrome.IsHitTestVisibleInChrome="True">
                     <Button Style="{StaticResource IconButton}" Content="&#xE713;" ToolTip="Settings" Click="Settings_Click"/>
                     <Button Style="{StaticResource IconButton}" Content="&#xE8BB;" ToolTip="Close (Esc)" Click="Close_Click"/>
@@ -156,7 +194,7 @@
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <Border Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="8" Padding="10,0" Height="36">
+                    <Border Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="8" Padding="10,0" Height="36">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
@@ -165,19 +203,21 @@
                             <TextBlock Style="{StaticResource Icon}" Text="&#xE721;" Margin="0,0,8,0"/>
                             <TextBox Grid.Column="1" x:Name="SearchBox" BorderThickness="0" Background="Transparent" VerticalContentAlignment="Center"
                                      TextChanged="SearchBox_TextChanged" FontSize="13"/>
-                            <TextBlock Grid.Column="1" x:Name="SearchHint" Text="Search history..." Foreground="{StaticResource Muted}" VerticalAlignment="Center"
+                            <TextBlock Grid.Column="1" x:Name="SearchHint" Text="Search history..." Foreground="{DynamicResource Muted}" VerticalAlignment="Center"
                                        Margin="2,0,0,0" IsHitTestVisible="False"/>
                         </Grid>
                     </Border>
-                    <Border Grid.Row="1" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="8" Margin="0,8,0,0">
+                    <Border Grid.Row="1" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="8" Margin="0,8,0,0">
                         <Grid>
                             <ListBox x:Name="ItemList" BorderThickness="0" Background="Transparent"
                                      ItemTemplateSelector="{StaticResource RowSelector}" ItemContainerStyle="{StaticResource RowStyle}"
                                      ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.ScrollUnit="Pixel"
-                                     SelectionChanged="ItemList_SelectionChanged" MouseDoubleClick="ItemList_MouseDoubleClick" Padding="0,4">
+                                     SelectionChanged="ItemList_SelectionChanged" MouseDoubleClick="ItemList_MouseDoubleClick"
+                                     PreviewMouseDown="ItemList_PreviewMouseDown" Padding="0,4">
                                 <ListBox.ContextMenu>
                                     <ContextMenu>
                                         <MenuItem Header="Paste" InputGestureText="Enter" Click="Paste_Click"/>
+                                        <MenuItem x:Name="PastePlainMenu" Header="Paste as plain text" InputGestureText="Shift+Enter" Click="PastePlain_Click"/>
                                         <MenuItem Header="Copy only" InputGestureText="Ctrl+Enter" Click="Copy_Click"/>
                                         <Separator/>
                                         <MenuItem x:Name="PinMenu" Header="Pin" InputGestureText="Ctrl+P" Click="Pin_Click"/>
@@ -185,7 +225,7 @@
                                     </ContextMenu>
                                 </ListBox.ContextMenu>
                             </ListBox>
-                            <TextBlock x:Name="EmptyText" Text="Nothing here yet. Copy something and it will show up." Foreground="{StaticResource Muted}"
+                            <TextBlock x:Name="EmptyText" Text="Nothing here yet. Copy something and it will show up." Foreground="{DynamicResource Muted}"
                                        HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Margin="24" Visibility="Collapsed"/>
                         </Grid>
                     </Border>
@@ -194,23 +234,23 @@
                 <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="Transparent" Focusable="False"/>
 
                 <!-- Right: preview -->
-                <Border Grid.Column="2" Background="{StaticResource PanelBg}" BorderBrush="{StaticResource Border}" BorderThickness="1" CornerRadius="8" Margin="0,0,10,10">
+                <Border Grid.Column="2" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource Border}" BorderThickness="1" CornerRadius="8" Margin="0,0,10,10">
                     <Grid>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
-                        <Border Grid.Row="0" BorderBrush="{StaticResource Border}" BorderThickness="0,0,0,1" Padding="12,6">
+                        <Border Grid.Row="0" BorderBrush="{DynamicResource Border}" BorderThickness="0,0,0,1" Padding="12,6">
                             <DockPanel>
                                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
-                                    <Button Style="{StaticResource PrimaryButton}" Content="Paste" Click="Paste_Click" Margin="0,0,6,0" ToolTip="Paste into the previous app (Enter)"/>
-                                    <Button Style="{StaticResource TextButton}" Content="Copy" Click="Copy_Click" Margin="0,0,6,0" ToolTip="Copy to clipboard only (Ctrl+Enter)"/>
+                                    <Button Style="{StaticResource IconButton}" Content="&#xE77F;" Click="Paste_Click" Foreground="{DynamicResource Accent}" ToolTip="Paste into the previous app (Enter)"/>
+                                    <Button Style="{StaticResource IconButton}" Content="&#xE8C8;" Click="Copy_Click" ToolTip="Copy to clipboard only (Ctrl+Enter)"/>
                                     <Button x:Name="PinButton" Style="{StaticResource IconButton}" Content="&#xE718;" Click="Pin_Click" ToolTip="Pin / unpin (Ctrl+P)"/>
                                     <Button Style="{StaticResource IconButton}" Content="&#xE74D;" Click="Delete_Click" ToolTip="Delete (Del)"/>
                                 </StackPanel>
                                 <StackPanel VerticalAlignment="Center">
                                     <TextBlock x:Name="PreviewTitle" FontWeight="SemiBold" Text="Preview" TextTrimming="CharacterEllipsis"/>
-                                    <TextBlock x:Name="PreviewMeta" Foreground="{StaticResource Muted}" FontSize="11.5" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock x:Name="PreviewMeta" Foreground="{DynamicResource Muted}" FontSize="11.5" TextTrimming="CharacterEllipsis"/>
                                 </StackPanel>
                             </DockPanel>
                         </Border>
@@ -222,8 +262,8 @@
             <!-- Footer -->
             <DockPanel Grid.Row="2" Margin="12,0">
                 <Button DockPanel.Dock="Right" Style="{StaticResource TextButton}" Content="Clear history" Padding="10,3" FontSize="11.5" Click="Clear_Click" VerticalAlignment="Center"/>
-                <TextBlock Foreground="{StaticResource Muted}" FontSize="11.5" VerticalAlignment="Center"
-                           Text="Enter paste  ·  Ctrl+Enter copy  ·  Ctrl+1-9 quick paste  ·  Ctrl+P pin  ·  Del delete  ·  Esc close"/>
+                <TextBlock Foreground="{DynamicResource Muted}" FontSize="11.5" VerticalAlignment="Center"
+                           Text="Enter paste  ·  Shift+Enter plain text  ·  Ctrl+Enter copy  ·  Ctrl+1-9 quick paste  ·  Ctrl+P pin  ·  Del delete  ·  Esc close"/>
             </DockPanel>
         </Grid>
     </Border>

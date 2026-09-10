@@ -1,22 +1,30 @@
 <Window x:Class="ClipVault.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="ClipVault settings" Width="440" SizeToContent="Height" ResizeMode="NoResize"
+        Title="ClipVault settings" Width="460" SizeToContent="Height" ResizeMode="NoResize"
         WindowStartupLocation="CenterOwner" Topmost="True" ShowInTaskbar="True"
-        Background="{StaticResource WindowBg}" Foreground="{StaticResource Text}" FontFamily="Segoe UI" FontSize="13"
-        TextOptions.TextFormattingMode="Display" UseLayoutRounding="True">
+        Background="{DynamicResource WindowBg}" Foreground="{DynamicResource Text}" FontFamily="Segoe UI" FontSize="13"
+        TextOptions.TextFormattingMode="Display" UseLayoutRounding="True" SourceInitialized="Window_SourceInitialized">
     <Window.Resources>
         <Style TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
+        <Style x:Key="Section" TargetType="TextBlock">
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Margin" Value="0,18,0,0"/>
+        </Style>
         <Style x:Key="Help" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Muted}"/>
             <Setter Property="FontSize" Value="11.5"/>
             <Setter Property="TextWrapping" Value="Wrap"/>
             <Setter Property="Margin" Value="0,2,0,0"/>
         </Style>
-        <Style TargetType="CheckBox">
+        <Style TargetType="CheckBox" BasedOn="{StaticResource {x:Type CheckBox}}">
             <Setter Property="Margin" Value="0,6"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style TargetType="RadioButton" BasedOn="{StaticResource {x:Type RadioButton}}">
+            <Setter Property="Margin" Value="0,0,18,0"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
     </Window.Resources>
@@ -27,24 +35,46 @@
                  PreviewKeyDown="HotkeyBox_PreviewKeyDown" GotKeyboardFocus="HotkeyBox_GotFocus" LostKeyboardFocus="HotkeyBox_LostFocus"/>
         <TextBlock Style="{StaticResource Help}" Text="Click the box, then press the key combination you want. It must include Ctrl, Alt, Shift or Win."/>
 
-        <TextBlock Text="History size" FontWeight="SemiBold" Margin="0,18,0,0"/>
+        <TextBlock Text="Appearance" Style="{StaticResource Section}"/>
+        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+            <RadioButton x:Name="ThemeSystemBox" Content="Match Windows" GroupName="Theme"/>
+            <RadioButton x:Name="ThemeLightBox" Content="Light" GroupName="Theme"/>
+            <RadioButton x:Name="ThemeDarkBox" Content="Dark" GroupName="Theme"/>
+        </StackPanel>
+
+        <TextBlock Text="History" Style="{StaticResource Section}"/>
         <DockPanel Margin="0,6,0,0">
             <TextBlock Text="items" Margin="8,0,0,0" DockPanel.Dock="Right"/>
             <TextBox x:Name="MaxItemsBox" Width="80" Padding="8,6" HorizontalAlignment="Left"/>
         </DockPanel>
         <TextBlock Style="{StaticResource Help}" Text="Oldest unpinned items are removed when the history grows past this."/>
 
-        <TextBlock Text="Behavior" FontWeight="SemiBold" Margin="0,18,0,6"/>
+        <DockPanel Margin="0,10,0,0">
+            <TextBlock Text="Shrink images wider or taller than" DockPanel.Dock="Left" Margin="0,0,8,0"/>
+            <TextBlock Text="px" Margin="8,0,0,0" DockPanel.Dock="Right"/>
+            <TextBox x:Name="MaxImageEdgeBox" Width="80" Padding="8,6" HorizontalAlignment="Left"/>
+        </DockPanel>
+        <TextBlock Style="{StaticResource Help}" Text="Keeps huge screenshots from filling the disk. Enter 0 to always store the original size."/>
+
+        <TextBlock Text="Behavior" Style="{StaticResource Section}" Margin="0,18,0,6"/>
         <CheckBox x:Name="AutoPasteBox" Content="Paste into the previous app when I pick an item (Enter / double-click)"/>
         <CheckBox x:Name="CaptureImagesBox" Content="Keep copied images and screenshots"/>
         <CheckBox x:Name="CaptureFilesBox" Content="Keep copied files and folders"/>
         <CheckBox x:Name="RunAtLoginBox" Content="Start ClipVault when I sign in to Windows"/>
 
+        <TextBlock Text="Never record copies from these apps" Style="{StaticResource Section}"/>
+        <TextBox x:Name="ExcludedAppsBox" Margin="0,6,0,0" Padding="8,6" Height="72" AcceptsReturn="True" TextWrapping="NoWrap"
+                 VerticalScrollBarVisibility="Auto" FontFamily="Consolas, Segoe UI"/>
+        <TextBlock Style="{StaticResource Help}" Text="One program per line, by process name, for example KeePass or 1Password. Case does not matter and .exe is optional."/>
+
         <TextBlock Style="{StaticResource Help}" Margin="0,12,0,0" x:Name="DataLocationText"/>
 
-        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
-            <Button Content="Cancel" Style="{StaticResource TextButton}" IsCancel="True" Width="90" Margin="0,0,8,0"/>
-            <Button Content="Save" Style="{StaticResource PrimaryButton}" IsDefault="True" Width="90" Click="Save_Click"/>
-        </StackPanel>
+        <DockPanel Margin="0,20,0,0">
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                <Button Content="Cancel" Style="{StaticResource TextButton}" IsCancel="True" Width="90" Margin="0,0,8,0"/>
+                <Button Content="Save" Style="{StaticResource PrimaryButton}" IsDefault="True" Width="90" Click="Save_Click"/>
+            </StackPanel>
+            <Button Content="About ClipVault" Style="{StaticResource TextButton}" HorizontalAlignment="Left" Click="About_Click"/>
+        </DockPanel>
     </StackPanel>
 </Window>

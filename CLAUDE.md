@@ -4,7 +4,7 @@ Windows-native clipboard history manager (WPF, .NET 9). Read `README.md` first f
 
 ## Status (as of 2026-09-10)
 
-Version 1.0.0. Feature-complete for the original brief and verified end to end on Windows 11:
+Version 1.1.0. Feature-complete for the original brief and verified end to end on Windows 11:
 
 - Capture of text (+RTF/HTML), images (saved as PNG), and file lists via `WM_CLIPBOARDUPDATE`.
 - Dedup by SHA-256 hash: re-copying or reusing an item moves it to the top instead of duplicating.
@@ -12,15 +12,26 @@ Version 1.0.0. Feature-complete for the original brief and verified end to end o
 - Popup window: search, list with per-kind templates, preview pane, pin/delete/clear, keyboard driven.
 - Reuse pastes into the previously focused app (`SetForegroundWindow` + `SendInput` Ctrl+V).
 - Settings dialog (hotkey capture, max items, auto-paste, capture toggles, start with Windows).
-- `dotnet publish -c Release` produces one self-contained `dist\ClipVault.exe` (~69 MB, compressed single file). No installer; nothing to install.
+- `dotnet publish -c Release` produces one self-contained `dist\ClipVault.exe` (~66 MB, compressed single file). No separate installer: the exe installs itself on first run (see 1.1.0 notes).
+
+Added in 1.1.0 (second session, same machine):
+
+- Paste as plain text: `Shift+Enter` / context menu strips RTF+HTML; `Ctrl+Shift+Enter` copies plain only. `ClipboardService.Apply(item, plainText)`.
+- Light/dark theme: `Services/ThemeManager.cs` swaps the palette brushes in `Application.Resources`; every palette reference in XAML is `DynamicResource`. Setting `Theme` = System (reads `AppsUseLightTheme`, follows `SystemEvents.UserPreferenceChanged`) / Light / Dark. Settings dialog gets a dark title bar via `DwmSetWindowAttribute(20)`. Message boxes and the tray menu stay system-styled.
+- Excluded apps: `Settings.ExcludedApps` (process names, `.exe` optional); `MainWindow.CaptureClipboard` checks the foreground process before reading the clipboard.
+- Image size cap: `Settings.MaxImageEdge` (default 4096, 0 = off) scales down via `TransformedBitmap` before hashing/saving, so the hash is of the stored PNG.
+- Code formatting: `Services/CodeDetector.cs` is a line-based heuristic (indentation, braces/semicolons, keyword/command prefixes, JSON/YAML keys, tags, a prose check). `ClipItem.IsCode` caches it; `ClipTemplateSelector.Code` picks the `CodeRow` / `CodePreview` templates (monospace, `CodeBg` brush, no wrapping). Sample cases live only in this session's notes; to re-test, compile the file into a scratch console app (see the 2026-09-10 session).
+- List rows are `Focusable=False` so typing stays in the search box, which stops WPF from selecting a row on click; `MainWindow.ItemList_PreviewMouseDown` selects the clicked row explicitly (bug in 1.0).
+- Self-install for sharing: `Services/Installer.cs` + `Views/InstallWindow`. On startup (after settings + theme, before anything else) `Installer.ShouldOffer` is true when the exe is not `%LocalAppData%\Programs\ClipVault\ClipVault.exe`, the user has not dismissed the prompt for this exact path (`Settings.InstallPromptDismissedFor`), and there is no installed copy or it is older (`FileVersionInfo` vs assembly version). Install = copy exe, HKCU Run entry (opt-in), Start menu `.lnk` via `WScript.Shell` COM, then release the mutex/event handles, launch the installed copy, exit. Update path works even when an instance is running: `Local\ClipVault.Exit` event asks it to `ExitApp` (saves history), `WaitForOtherInstancesToExit` waits then kills. `--portable` skips the prompt (both harness scripts pass it). Tray shows "Install..." or "Uninstall..." depending on `IsInstalledCopy`; uninstall self-deletes via a detached `cmd /c ping ... & del`. `StartupRegistration.RepairIfStale` re-points a Run entry whose target is gone. Nothing needs admin: user Programs folder, HKCU, user Start menu.
+- About dialog (`Views/AboutWindow`): version + installed/portable, author "Ovidio Verona" (`AboutWindow.Author`), copyright, disclaimer text, "Open data folder". Reached from the tray menu and the Settings dialog. The csproj sets `Authors`/`Company`/`Copyright` to the author's personal name so the exe's file properties match; keep it a person, not a company name.
+- `App.xaml` now also carries theme-aware implicit styles for TextBox, CheckBox, RadioButton, ToolTip, ContextMenu/MenuItem and a slim ScrollBar.
 
 Not done / ideas for later (none were requested, listed so nothing is forgotten):
 
 - Code signing (unsigned exe triggers SmartScreen "More info > Run anyway" on first run).
 - Inno Setup installer if a Start Menu entry / uninstaller is ever wanted (winget is available on the dev box; `iscc` was not installed).
-- Dark theme (currently a fixed light palette in `App.xaml`).
-- Excluding specific apps from capture, per-item "paste as plain text".
-- Optional image size cap (large screenshots are stored at full resolution).
+- Dark styling for `MessageBox` (still system light) and the WinForms tray menu.
+- Excluded-apps check uses the foreground process at capture time; apps that copy in the background are not matched.
 
 ## Decisions taken with the user
 
@@ -41,6 +52,8 @@ Other choices made along the way:
 - Priority when several formats are on the clipboard: files, then text, then image. Excel/browsers put text and a bitmap together; the text is what the user meant.
 - Honors `ExcludeClipboardContentFromMonitorProcessing` and `CanIncludeInClipboardHistory=0` formats (password managers).
 - Window is `WindowStyle=None` + `WindowChrome` (custom title bar with settings/close), `Topmost`, hides on `Deactivated`. Closing the window only hides it; the tray menu's Exit quits.
+- 1.1: window is also `AllowsTransparency=True` with a transparent background and an 8px-rounded root Border, so `Opacity` can be animated. `PositionOnCursorScreen` docks it against the taskbar edge (bottom/top/left/right, detected from `Screen.Bounds` vs `WorkingArea`) centered along that edge, and `SlideIn` animates `Left`/`Top` 56 DIPs from that edge plus a 160 ms fade (`FillBehavior.Stop`, base values already final). Hide is still instant so the paste flow is not delayed.
+- Preview toolbar buttons are all icon buttons (paste E77F in accent, copy E8C8, pin, delete). Each list row header has a hover/selected-only copy icon (`RowCopy_Click`); `ItemList_MouseDoubleClick` ignores double-clicks that land on a button.
 - DPI: `ApplicationHighDpiMode=PerMonitorV2` in the csproj (the WinForms analyzer complains if it is put in `app.manifest` instead).
 
 ## Code map
@@ -52,10 +65,15 @@ App.xaml / App.xaml.cs      styles + palette; startup, single-instance mutex/eve
 Models/ClipItem.cs          persisted item + display helpers (Preview, TimeAgo, Thumbnail, Matches)
 Services/ClipboardService.cs  Capture() clipboard -> ClipItem, Apply() ClipItem -> clipboard, retries
 Services/HistoryStore.cs    ObservableCollection + JSON persistence, AddOrTouch (dedup), pin, trim
-Services/Settings.cs        settings.json model, hotkey formatting, StartupRegistration (HKCU Run)
+Services/Settings.cs        settings.json model, hotkey formatting, theme/excluded apps/image cap, StartupRegistration (HKCU Run)
+Services/ThemeManager.cs    light/dark palette swap, reads Windows app mode
+Services/Installer.cs       self-install/update/uninstall into %LocalAppData%\Programs\ClipVault
+Views/InstallWindow.xaml(.cs)   first-run "Install / Run from here" and "Update / Not now" dialog
+Services/CodeDetector.cs    heuristic "is this text code?" used for monospace rendering
 Native/NativeMethods.cs     clipboard listener, RegisterHotKey, SendInput Ctrl+V, foreground helpers
 Views/MainWindow.xaml(.cs)  popup UI, WndProc hook, capture debounce, keyboard handling, paste flow
 Views/SettingsWindow.xaml(.cs)  settings dialog with hotkey capture box
+Views/AboutWindow.xaml(.cs)     about box: version, author, disclaimer
 Views/ClipTemplateSelector.cs   picks row/preview DataTemplate by ClipKind
 Assets/make-icon.ps1        draws the icon with System.Drawing and writes a multi-size .ico
 tools/                      test harness scripts (see Testing)
@@ -70,7 +88,7 @@ Second-instance flow: new process finds the mutex taken, calls `AllowSetForegrou
 
 There is no unit test project. Verification is done by driving the real app:
 
-- `tools\e2e-test.ps1` starts the app, pushes text/image/file content onto the clipboard, opens the popup from a small WinForms form (acting as the "previous app"), types a filter, presses Enter, and asserts the text was pasted into the form's text box. It also saves a screenshot of the popup to `tools\popup.png`. Run it from a normal PowerShell window (it needs a desktop session). Pass `-Exe` to point at the published exe instead of the Debug build.
+- `tools\e2e-test.ps1` starts the app, pushes text/image/file content onto the clipboard, opens the popup from a small WinForms form (acting as the "previous app"), types a filter, presses Enter, and asserts the text was pasted into the form's text box. A second round does the same with `Shift+Enter` (plain text) and expects UseCount 2. It also saves a screenshot of the popup to `tools\popup.png`. Run it from a normal PowerShell window (it needs a desktop session). Pass `-Exe` to point at the published exe instead of the Debug build.
 - `tools\capture-window.ps1` screenshots the running popup (DPI-aware `CopyFromScreen`; `PrintWindow` returns black for this WPF window).
 - Runtime errors are appended to `%LocalAppData%\ClipVault\clipvault.log`.
 
@@ -79,6 +97,9 @@ Gotchas discovered while testing:
 - PowerShell 5.1 is not DPI-aware; window coordinates are virtualized. Any script that captures the screen must call `SetProcessDpiAwarenessContext(-4)` first (both harness scripts do).
 - The popup hides as soon as another window takes focus, so screenshots must be taken within the same script run that opened it.
 - Claude Code's computer-use bridge cannot be granted access to ClipVault because it is not a Start-Menu app; that is why the PowerShell harness exists.
+- If the workstation is locked (`Get-Process LogonUI` succeeds, `GetForegroundWindow` returns 0), `SendKeys` throws "Access is denied" and every assertion fails. Unlock and rerun; nothing is wrong with the app.
+- Stop the running ClipVault before `dotnet build`; the Debug exe keeps `bin\Debug\...\ClipVault.dll` locked.
+- To screenshot the dark theme, set `"Theme": "Dark"` in `%LocalAppData%\ClipVault\settings.json` and rerun the harness (it restarts the app).
 
 ## Continuing on another machine
 
