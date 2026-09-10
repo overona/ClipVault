@@ -18,8 +18,8 @@ Write-Host "`nBuilt $exe ($size MB)" -ForegroundColor Green
 
 if ($Zip) {
     $version = (Select-Xml -Path (Join-Path $root 'ClipVault.csproj') -XPath '//Version').Node.InnerText
-    $zip = Join-Path $dist "ClipVault-$version.zip"
-    if (Test-Path $zip) { Remove-Item $zip }
-    Compress-Archive -Path $exe, (Join-Path $root 'README.md') -DestinationPath $zip
-    Write-Host "Zipped to $zip" -ForegroundColor Green
+    $zipPath = Join-Path $dist "ClipVault-$version.zip"
+    if (Test-Path $zipPath) { Remove-Item $zipPath }
+    Compress-Archive -Path $exe, (Join-Path $root 'README.md') -DestinationPath $zipPath
+    Write-Host "Zipped to $zipPath" -ForegroundColor Green
 }
