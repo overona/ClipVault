@@ -29,7 +29,6 @@ Added in 1.1.0 (second session, same machine):
 
 Not done / ideas for later (none were requested, listed so nothing is forgotten):
 
-- Code signing (unsigned exe triggers SmartScreen "More info > Run anyway" on first run).
 - Inno Setup installer if a Start Menu entry / uninstaller is ever wanted (winget is available on the dev box; `iscc` was not installed).
 - Dark styling for `MessageBox` (still system light) and the WinForms tray menu.
 - Excluded-apps check uses the foreground process at capture time; apps that copy in the background are not matched.

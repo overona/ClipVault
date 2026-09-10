@@ -57,7 +57,7 @@ To share it with someone else, send them the exe (or the zip from the `dist` fol
 
 **Start with Windows** can be toggled any time from the tray menu or Settings. If you ever move the exe, the next launch repairs the startup entry automatically.
 
-Windows SmartScreen may show "Windows protected your PC" the first time because the exe is not code-signed. Click **More info**, then **Run anyway**. That is a one-time warning, not an admin prompt.
+Releases from 1.1.4 on are code-signed by Verona Solutions, LLC (right-click the exe, Properties, Digital Signatures). While the certificate is new, SmartScreen may still show "Windows protected your PC" the first time: click **More info**, then **Run anyway**. That is a one-time warning, not an admin prompt.
 
 History and settings live in `%LocalAppData%\ClipVault` (`history.json`, `settings.json`, an `images` folder, and `clipvault.log` if anything goes wrong). Delete that folder to reset the app.
 
