@@ -94,10 +94,9 @@
 
         <!-- ============ Preview templates ============ -->
         <DataTemplate x:Key="TextPreview">
-            <TextBox Text="{Binding Text, Mode=OneWay}" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True"
-                     VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
-                     BorderThickness="0" Background="Transparent" Padding="12" FontSize="13"
-                     FontFamily="Segoe UI, Consolas" IsReadOnlyCaretVisible="True"/>
+            <local:LinkTextBox Text="{Binding Text, Mode=OneWay}" Foreground="{DynamicResource Text}"
+                               VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                               Padding="12" FontSize="13" FontFamily="Segoe UI" IsReadOnlyCaretVisible="True"/>
         </DataTemplate>
 
         <DataTemplate x:Key="CodePreview">
@@ -122,7 +121,11 @@
                     <DataTemplate>
                         <DockPanel Margin="0,0,0,6">
                             <TextBlock Style="{StaticResource Icon}" Text="&#xE8A5;" Margin="0,0,8,0"/>
-                            <TextBlock Text="{Binding}" TextWrapping="Wrap" TextTrimming="CharacterEllipsis"/>
+                            <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Width="26" Height="22" FontSize="12" Margin="8,0,0,0"
+                                    Content="&#xE838;" ToolTip="Show in folder" Tag="{Binding}" Click="ShowInFolder_Click"/>
+                            <TextBlock TextWrapping="Wrap" TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
+                                <Hyperlink Tag="{Binding}" Click="OpenPath_Click" ToolTip="Open"><Run Text="{Binding Mode=OneWay}"/></Hyperlink>
+                            </TextBlock>
                         </DockPanel>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>

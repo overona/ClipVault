@@ -15,6 +15,7 @@ A native Windows clipboard history manager. It runs quietly in the system tray, 
 - **Pin** items you want to keep around; pinned items stay at the top and are never trimmed.
 - **Rich text preserved**: RTF and HTML formats are kept alongside plain text, so pasting into Word or Outlook keeps formatting. `Shift+Enter` pastes the plain text only when you want to drop the formatting.
 - **Code looks like code**: snippets, JSON, markup, SQL and shell commands are detected and shown in a monospace font with a code background, unwrapped, in both the list and the preview.
+- **Clickable preview**: web links and e-mail addresses in a text item open in your browser or mail app, file paths that still exist open too, and each entry in a copied-files item can be opened or shown in Explorer.
 - **Light and dark**: follows the Windows app mode by default, or pick a theme in Settings.
 - **Leave some apps out**: list your password manager (or anything else) in Settings and its copies are never recorded.
 - **Image size cap**: screenshots larger than a configurable size are shrunk on capture so the history folder stays small (default 4096 px on the long edge; 0 keeps originals).

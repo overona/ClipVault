@@ -24,6 +24,7 @@ Added in 1.1.0 (second session, same machine):
 - List rows are `Focusable=False` so typing stays in the search box, which stops WPF from selecting a row on click; `MainWindow.ItemList_PreviewMouseDown` selects the clicked row explicitly (bug in 1.0).
 - Self-install for sharing: `Services/Installer.cs` + `Views/InstallWindow`. On startup (after settings + theme, before anything else) `Installer.ShouldOffer` is true when the exe is not `%LocalAppData%\Programs\ClipVault\ClipVault.exe`, the user has not dismissed the prompt for this exact path (`Settings.InstallPromptDismissedFor`), and there is no installed copy or it is older (`FileVersionInfo` vs assembly version). Install = copy exe, HKCU Run entry (opt-in), Start menu `.lnk` via `WScript.Shell` COM, then release the mutex/event handles, launch the installed copy, exit. Update path works even when an instance is running: `Local\ClipVault.Exit` event asks it to `ExitApp` (saves history), `WaitForOtherInstancesToExit` waits then kills. `--portable` skips the prompt (both harness scripts pass it). Tray shows "Install..." or "Uninstall..." depending on `IsInstalledCopy`; uninstall self-deletes via a detached `cmd /c ping ... & del`. `StartupRegistration.RepairIfStale` re-points a Run entry whose target is gone. Nothing needs admin: user Programs folder, HKCU, user Start menu.
 - About dialog (`Views/AboutWindow`): version + installed/portable, author "Ovidio Verona" (`AboutWindow.Author`), copyright, disclaimer text, "Open data folder". Reached from the tray menu and the Settings dialog. The csproj sets `Authors`/`Company`/`Copyright` to the author's personal name so the exe's file properties match; keep it a person, not a company name.
+- Clickable preview (1.1.3): `Views/LinkTextBox.cs` is a read-only RichTextBox (`IsDocumentEnabled=True` so a plain click follows a Hyperlink) that rebuilds a FlowDocument from its `Text` DP, linking URLs, e-mails and paths that exist on disk (`File.Exists`/`Directory.Exists`, so prose with backslashes is left alone); clips over 200k chars are shown plain. Code clips keep the monospace TextBox. `FilesPreview` rows are Hyperlinks plus a "show in folder" button; `Services/LinkOpener.cs` does `Process.Start(UseShellExecute)` and `explorer /select`. Hyperlink style (accent, underline on hover) lives in App.xaml.
 - `App.xaml` now also carries theme-aware implicit styles for TextBox, CheckBox, RadioButton, ToolTip, ContextMenu/MenuItem and a slim ScrollBar.
 
 Not done / ideas for later (none were requested, listed so nothing is forgotten):
@@ -74,6 +75,8 @@ Native/NativeMethods.cs     clipboard listener, RegisterHotKey, SendInput Ctrl+V
 Views/MainWindow.xaml(.cs)  popup UI, WndProc hook, capture debounce, keyboard handling, paste flow
 Views/SettingsWindow.xaml(.cs)  settings dialog with hotkey capture box
 Views/AboutWindow.xaml(.cs)     about box: version, author, disclaimer
+Views/LinkTextBox.cs            read-only RichTextBox that linkifies URLs/e-mails/existing paths
+Services/LinkOpener.cs      opens links, files, folders via the shell
 Views/ClipTemplateSelector.cs   picks row/preview DataTemplate by ClipKind
 Assets/make-icon.ps1        draws the icon with System.Drawing and writes a multi-size .ico
 tools/                      test harness scripts (see Testing)

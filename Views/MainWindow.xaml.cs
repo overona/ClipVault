@@ -400,6 +400,16 @@ public partial class MainWindow : Window
             UseItem(Selected, paste: true);
     }
 
+    private void OpenPath_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkContentElement)?.Tag is string path) LinkOpener.Open(path);
+    }
+
+    private void ShowInFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if ((sender as FrameworkElement)?.Tag is string path) LinkOpener.ShowInFolder(path);
+    }
+
     /// <summary>The small copy icon on each row: copy that row without pasting.</summary>
     private void RowCopy_Click(object sender, RoutedEventArgs e)
     {
