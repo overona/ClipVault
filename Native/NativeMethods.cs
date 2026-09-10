@@ -33,6 +33,14 @@ internal static class NativeMethods
 
     private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
 
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool MoveFileEx(string lpExistingFileName, string? lpNewFileName, uint dwFlags);
+
+    private const uint MOVEFILE_DELAY_UNTIL_REBOOT = 0x4;
+
+    /// <summary>Schedules a file or (empty) directory for deletion when Windows next starts.</summary>
+    public static bool DeleteOnReboot(string path) => MoveFileEx(path, null, MOVEFILE_DELAY_UNTIL_REBOOT);
+
     /// <summary>Asks DWM to draw a dark (or light) title bar for a window that still has the standard chrome.</summary>
     public static void SetDarkTitleBar(IntPtr hwnd, bool dark)
     {

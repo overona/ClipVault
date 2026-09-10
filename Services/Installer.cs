@@ -71,9 +71,11 @@ public static class Installer
         {
             try { Directory.Delete(Settings.DataDir, recursive: true); } catch (Exception ex) { App.Log("Delete data failed: " + ex.Message); }
         }
-        // The running exe cannot delete itself; hand that to a detached cmd that waits for us to exit.
-        var script = $"ping 127.0.0.1 -n 3 >nul & del /f /q \"{InstalledExe}\" & rmdir \"{InstallDir}\"";
-        Process.Start(new ProcessStartInfo("cmd.exe", "/c " + script) { CreateNoWindow = true, UseShellExecute = false, WindowStyle = ProcessWindowStyle.Hidden });
+        // A running exe cannot delete itself. Ask Windows to remove the file and its folder at the next
+        // restart (the documented MoveFileEx mechanism) instead of spawning a delete script, which is a
+        // pattern antivirus behaviour monitoring treats as suspicious.
+        ClipVault.Native.NativeMethods.DeleteOnReboot(InstalledExe);
+        ClipVault.Native.NativeMethods.DeleteOnReboot(InstallDir);
     }
 
     public static void CreateShortcut()
